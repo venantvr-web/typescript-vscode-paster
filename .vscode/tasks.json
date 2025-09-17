@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "watch",
+			"group": "build",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never"
+			},
+			"problemMatcher": [
+				{
+					"owner": "webpack",
+					"fileLocation": "relative",
+					"pattern": {
+						"regexp": "ERROR in (.*)\n(.*)",
+						"file": 1,
+						"message": 2
+					},
+					"background": {
+						"activeOnStart": true,
+						"beginsPattern": "^(webpack .* started watching for changes.)$",
+						"endsPattern": "^(webpack is watching the files...)$"
+					}
+				}
+			]
+		}
+	]
+}
