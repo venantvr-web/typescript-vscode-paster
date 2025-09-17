@@ -1,71 +1,64 @@
-# llm-code-paster README
+# LLM Code Paster
 
-This is the README for your extension "llm-code-paster". After writing up a brief description, we recommend including the following sections.
+Instantly paste and apply multi-file code snippets from LLMs into your VSCode workspace.
+
+## What it does
+
+LLM Code Paster streamlines the workflow of applying code suggestions from AI assistants like ChatGPT, Claude, or Copilot. Simply paste structured code output and the extension automatically creates or updates multiple files at once.
+
+## How to use
+
+1. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+2. Run `LLM Paste and Replace Code`
+3. Paste your LLM-generated code in the format:
+   ```
+   File: path/to/file.js
+   Content:
+   // Your code here
+
+   File: another/file.py
+   Content:
+   # More code here
+   ```
+4. Click "Create / Update Files"
+5. Files are instantly created/updated with optional auto-save
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Batch file operations** - Create or update multiple files in one action
+- **Smart parsing** - Automatically detects file paths and content blocks
+- **Auto-save option** - Toggle automatic saving of modified files
+- **Workspace integration** - Works seamlessly with your current VSCode workspace
+- **Error handling** - Clear feedback on parsing errors or invalid formats
 
-For example if there is an image subfolder under your extension project workspace:
+## Format Example
 
-\!\[feature X\]\(images/feature-x.png\)
+```
+File: src/components/Button.tsx
+Content:
+export const Button = ({ label, onClick }) => {
+  return <button onClick={onClick}>{label}</button>
+}
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+File: src/styles/button.css
+Content:
+.button {
+  padding: 10px 20px;
+  border-radius: 4px;
+}
+```
+
+## Installation
+
+1. Install from VSCode Marketplace or from VSIX file
+2. Open any workspace folder
+3. Start using with `LLM Paste and Replace Code` command
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- VSCode 1.80.0 or higher
+- Active workspace folder
 
-## Extension Settings
+## License
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+MIT
