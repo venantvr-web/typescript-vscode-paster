@@ -16,7 +16,10 @@ export function activate(context: vscode.ExtensionContext) {
 			'codePaster',
 			'LLM Code Paster',
 			vscode.ViewColumn.One,
-			{ enableScripts: true }
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true
+			}
 		);
 
 		panel.webview.html = getWebviewContent();
@@ -125,35 +128,151 @@ function getWebviewContent() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>LLM Code Paster</title>
       <style>
-        body { font-family: var(--vscode-font-family); background-color: var(--vscode-editor-background); color: var(--vscode-editor-foreground); }
-        textarea { width: 95%; height: 75vh; border: 1px solid var(--vscode-input-border); background-color: var(--vscode-input-background); color: var(--vscode-input-foreground); font-family: var(--vscode-editor-font-family); }
-        button { margin-top: 10px; padding: 5px 15px; border: 1px solid var(--vscode-button-border); background: var(--vscode-button-background); color: var(--vscode-button-foreground); cursor: pointer; }
-        button:hover { background: var(--vscode-button-hoverBackground); }
+        body {
+          font-family: var(--vscode-font-family);
+          background-color: var(--vscode-editor-background);
+          color: var(--vscode-editor-foreground);
+          padding: 20px;
+          margin: 0;
+        }
+
+        h1 {
+          font-size: 1.5em;
+          margin-bottom: 15px;
+          font-weight: 500;
+        }
+
+        #editor-container {
+          width: 100%;
+          height: 70vh;
+          border: 1px solid var(--vscode-input-border);
+          border-radius: 3px;
+          overflow: hidden;
+        }
+
+        #monaco-editor {
+          width: 100%;
+          height: 100%;
+        }
+
+        .controls {
+          margin-top: 15px;
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+
+        .checkbox-container {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          flex-grow: 1;
+        }
+
+        button {
+          padding: 8px 16px;
+          border: 1px solid var(--vscode-button-border);
+          background: var(--vscode-button-background);
+          color: var(--vscode-button-foreground);
+          cursor: pointer;
+          border-radius: 2px;
+          font-size: 13px;
+        }
+
+        button:hover {
+          background: var(--vscode-button-hoverBackground);
+        }
+
+        button.secondary {
+          background: var(--vscode-button-secondaryBackground);
+          color: var(--vscode-button-secondaryForeground);
+        }
+
+        button.secondary:hover {
+          background: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        input[type="checkbox"] {
+          cursor: pointer;
+        }
       </style>
   </head>
   <body>
-      <h1>Paste Your Code Snippet</h1>
-      <textarea id="code-input" placeholder="File: src/components/NewComponent.js\nContent:\n// your code here"></textarea>
-      <br>
-      <label style="display: block; margin-top: 10px;">
-        <input type="checkbox" id="auto-save" checked> Auto-save files after update
-      </label>
-      <button id="update-button">Create / Update Files</button>
-      
+      <h1>📋 LLM Code Paster</h1>
+
+      <div id="editor-container">
+        <div id="monaco-editor"></div>
+      </div>
+
+      <div class="controls">
+        <div class="checkbox-container">
+          <input type="checkbox" id="auto-save" checked>
+          <label for="auto-save">Auto-save files after update</label>
+        </div>
+        <button id="clear-button" class="secondary">Clear</button>
+        <button id="update-button">Create / Update Files</button>
+      </div>
+
+      <script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
       <script>
         const vscode = acquireVsCodeApi();
-        const updateButton = document.getElementById('update-button');
-        const codeInput = document.getElementById('code-input');
-        const autoSaveCheckbox = document.getElementById('auto-save');
 
-        updateButton.addEventListener('click', () => {
-          const text = codeInput.value;
-          const autoSave = autoSaveCheckbox.checked;
-          vscode.postMessage({
-            command: 'updateFiles',
-            text: text,
-            autoSave: autoSave
+        require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.44.0/min/vs' }});
+
+        require(['vs/editor/editor.main'], function() {
+          const editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            value: 'File: src/components/NewComponent.js\\nContent:\\n// your code here\\n\\nFile: src/styles/style.css\\nContent:\\n/* CSS here */',
+            language: 'plaintext',
+            theme: document.body.classList.contains('vscode-dark') ? 'vs-dark' :
+                   document.body.classList.contains('vscode-light') ? 'vs' : 'vs-dark',
+            minimap: { enabled: false },
+            fontSize: 13,
+            lineNumbers: 'on',
+            wordWrap: 'on',
+            automaticLayout: true,
+            scrollBeyondLastLine: false
           });
+
+          // Define custom language for syntax highlighting
+          monaco.languages.register({ id: 'llm-paste' });
+          monaco.languages.setMonarchTokensProvider('llm-paste', {
+            tokenizer: {
+              root: [
+                [/^File:.*$/, 'keyword'],
+                [/^Content:.*$/, 'type'],
+                [/\\/\\/.*$/, 'comment'],
+                [/\\/\\*[\\s\\S]*?\\*\\//, 'comment'],
+                [/#.*$/, 'comment'],
+                [/"[^"]*"/, 'string'],
+                [/'[^']*'/, 'string'],
+                [/\\b(function|const|let|var|if|else|return|class|export|import)\\b/, 'keyword'],
+              ]
+            }
+          });
+
+          editor.getModel().setLanguage('llm-paste');
+
+          const updateButton = document.getElementById('update-button');
+          const clearButton = document.getElementById('clear-button');
+          const autoSaveCheckbox = document.getElementById('auto-save');
+
+          updateButton.addEventListener('click', () => {
+            const text = editor.getValue();
+            const autoSave = autoSaveCheckbox.checked;
+            vscode.postMessage({
+              command: 'updateFiles',
+              text: text,
+              autoSave: autoSave
+            });
+          });
+
+          clearButton.addEventListener('click', () => {
+            editor.setValue('');
+            editor.focus();
+          });
+
+          // Auto-focus editor
+          editor.focus();
         });
       </script>
   </body>
