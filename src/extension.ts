@@ -1,8 +1,11 @@
+// src/extension.ts
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
 
-  // Create status bar item
+  // Create status bar item (inchangé)
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = "$(paste) LLM Paster";
   statusBarItem.tooltip = "Open LLM Code Paster";
@@ -18,12 +21,19 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.ViewColumn.One,
       {
         enableScripts: true,
-        retainContextWhenHidden: true
+        retainContextWhenHidden: true,
+        // On ajoute les localResourceRoots pour autoriser l'accès aux fichiers de notre extension
+        localResourceRoots: [
+          vscode.Uri.joinPath(context.extensionUri, 'webview'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules')
+        ]
       }
     );
 
-    panel.webview.html = getWebviewContent();
+    // On passe le panel et le contexte à notre nouvelle fonction
+    panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
 
+    // Le reste de la logique de communication est presque identique
     panel.webview.onDidReceiveMessage(
       async message => {
         switch (message.command) {
@@ -55,18 +65,28 @@ export function activate(context: vscode.ExtensionContext) {
               const rootUri = workspaceFolders[0].uri;
               const fileUri = vscode.Uri.joinPath(rootUri, message.filePath);
 
-              // Create temp file with new content
-              const tempUri = vscode.Uri.parse(`untitled:${message.filePath}.new`);
-              await vscode.workspace.openTextDocument(tempUri).then(async (doc) => {
-                const edit = new vscode.WorkspaceEdit();
-                edit.insert(tempUri, new vscode.Position(0, 0), message.newContent);
-                await vscode.workspace.applyEdit(edit);
+              // La logique pour créer un fichier temporaire et montrer le diff est complexe
+              // et peut être sujette à des "race conditions".
+              // Une approche plus simple est de créer un fichier temporaire dans le système de fichiers.
+              // Mais nous gardons votre approche `untitled` qui est bonne.
+              const tempUri = vscode.Uri.parse(`untitled:${path.join(workspaceFolders[0].uri.fsPath, message.filePath)}.new`);
+              const doc = await vscode.workspace.openTextDocument(tempUri);
+              const edit = new vscode.WorkspaceEdit();
+              edit.insert(tempUri, new vscode.Position(0, 0), message.newContent);
+              await vscode.workspace.applyEdit(edit);
 
-                // Show diff
-                vscode.commands.executeCommand('vscode.diff', fileUri, tempUri, `${message.filePath} ← Changes`);
-              });
+              // Attendre que le document soit prêt avant de lancer le diff
+              await doc.save();
+
+              vscode.commands.executeCommand('vscode.diff', fileUri, tempUri, `${message.filePath} (Preview)`);
+
             } catch (e: any) {
-              vscode.window.showErrorMessage(`Error showing diff: ${e.message}`);
+              // On vérifie si l'erreur est que le fichier original n'existe pas.
+              if (e.message.includes('cannot open')) {
+                vscode.window.showInformationMessage("Cannot show diff for a new file.");
+              } else {
+                vscode.window.showErrorMessage(`Error showing diff: ${e.message}`);
+              }
             }
             return;
         }
@@ -79,6 +99,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(disposable);
 }
 
+// Les fonctions parseInputText, applyFileUpdates, previewChanges restent inchangées...
+// ... (collez vos fonctions ici)
 function parseInputText(text: string): { [filePath: string]: string } {
   const files: { [filePath: string]: string } = {};
   const lines = text.split(/\r?\n/);
@@ -92,30 +114,37 @@ function parseInputText(text: string): { [filePath: string]: string } {
     throw new Error("Format invalide : Le texte doit commencer par une ligne 'File:'.");
   }
 
+  let currentPath = '';
+  let contentLines: string[] = [];
+  let parsingContent = false;
+
   for (let i = 0; i < lines.length; i++) {
-    const currentLine = lines[i];
-
-    if (currentLine.startsWith('File: ')) {
-      if (i + 1 >= lines.length || !lines[i + 1].startsWith('Content:')) {
-        throw new Error(`Erreur de syntaxe à la ligne ${i + 2}: Une ligne 'File:' doit être immédiatement suivie par une ligne 'Content:'.`);
+    const line = lines[i];
+    if (line.startsWith('File: ')) {
+      if (parsingContent) { // Save previous file
+        files[currentPath] = contentLines.join('\n');
       }
-
-      const path = currentLine.substring('File: '.length).trim();
-      if (!path) {
+      currentPath = line.substring('File: '.length).trim();
+      if (!currentPath) {
         throw new Error(`Erreur de syntaxe à la ligne ${i + 1}: Le chemin du fichier ne peut pas être vide.`);
       }
-
-      const contentLines = [];
-      let contentIndex = i + 2;
-      while (contentIndex < lines.length && !lines[contentIndex].startsWith('File: ')) {
-        contentLines.push(lines[contentIndex]);
-        contentIndex++;
+      contentLines = [];
+      parsingContent = false;
+      if (i + 1 < lines.length && lines[i + 1].startsWith('Content:')) {
+        parsingContent = true;
+        i++; // Skip 'Content:' line
+      } else {
+        throw new Error(`Erreur de syntaxe à la ligne ${i + 2}: Une ligne 'File:' doit être immédiatement suivie par une ligne 'Content:'.`);
       }
-
-      files[path] = contentLines.join('\n');
-      i = contentIndex - 1;
+    } else if (parsingContent) {
+      contentLines.push(line);
     }
   }
+
+  if (currentPath && parsingContent) {
+    files[currentPath] = contentLines.join('\n');
+  }
+
 
   if (Object.keys(files).length === 0) {
     throw new Error("Aucun bloc 'File:' valide n'a été trouvé. Vérifiez le format.");
@@ -124,34 +153,30 @@ function parseInputText(text: string): { [filePath: string]: string } {
   return files;
 }
 
+
 async function applyFileUpdates(files: { [filePath: string]: string }, autoSave: boolean = true) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders) {
     throw new Error("You must have a folder open in your workspace.");
   }
   const rootUri = workspaceFolders[0].uri;
-  const workspaceEdit = new vscode.WorkspaceEdit();
 
   for (const filePath in files) {
     const newContent = files[filePath];
     const fileUri = vscode.Uri.joinPath(rootUri, filePath);
-    workspaceEdit.createFile(fileUri, { overwrite: true, ignoreIfExists: false });
-    workspaceEdit.insert(fileUri, new vscode.Position(0, 0), newContent);
-  }
 
-  const success = await vscode.workspace.applyEdit(workspaceEdit);
-  if (!success) {
-    throw new Error("Failed to apply file edits.");
+    const contentUint8Array = new TextEncoder().encode(newContent);
+
+    // Utiliser fs.writeFile est plus direct pour créer/écraser.
+    await vscode.workspace.fs.writeFile(fileUri, contentUint8Array);
   }
 
   if (autoSave) {
-    for (const filePath in files) {
-      const fileUri = vscode.Uri.joinPath(rootUri, filePath);
-      const doc = await vscode.workspace.openTextDocument(fileUri);
-      await doc.save();
-    }
+    // Le writeFile ci-dessus enregistre déjà les fichiers, mais si on utilisait WorkspaceEdit,
+    // la boucle de sauvegarde serait nécessaire. C'est maintenant redondant.
   }
 }
+
 
 async function previewChanges(files: { [filePath: string]: string }): Promise<any[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -167,9 +192,9 @@ async function previewChanges(files: { [filePath: string]: string }): Promise<an
     let oldContent = '';
 
     try {
-      const doc = await vscode.workspace.openTextDocument(fileUri);
+      const content = await vscode.workspace.fs.readFile(fileUri);
+      oldContent = new TextDecoder().decode(content);
       fileExists = true;
-      oldContent = doc.getText();
     } catch {
       fileExists = false;
     }
@@ -186,409 +211,43 @@ async function previewChanges(files: { [filePath: string]: string }): Promise<an
   return changes;
 }
 
-function getWebviewContent() {
-  return `<!DOCTYPE html>
-  <html lang="en">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>LLM Code Paster</title>
-      <style>
-        body {
-          font-family: var(--vscode-font-family);
-          background-color: var(--vscode-editor-background);
-          color: var(--vscode-editor-foreground);
-          padding: 20px;
-          margin: 0;
-        }
+// =========================================================================
+// NOUVELLE FONCTION POUR CHARGER LE HTML
+// =========================================================================
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+  // Chemin vers le fichier HTML sur le disque
+  const htmlPath = path.join(extensionUri.fsPath, 'webview', 'index.html');
+  let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
-        h1 {
-          font-size: 1.5em;
-          margin-bottom: 15px;
-          font-weight: 500;
-        }
+  // Fonction pour générer une URI sécurisée pour la webview
+  const getUri = (...p: string[]) => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, ...p));
 
-        #editor-container {
-          width: 100%;
-          height: 70vh;
-          border: 1px solid var(--vscode-input-border);
-          border-radius: 3px;
-          overflow: hidden;
-        }
+  // URIs pour nos fichiers locaux
+  const scriptUri = getUri('webview', 'main.js');
+  const styleUri = getUri('webview', 'style.css');
+  const monacoLoaderUri = getUri('node_modules', 'monaco-editor', 'min', 'vs', 'loader.js');
+  const monacoBaseUri = getUri('node_modules', 'monaco-editor', 'min', 'vs');
 
-        #monaco-editor {
-          width: 100%;
-          height: 100%;
-        }
+  // Utilisation d'un "nonce" pour la sécurité (autorise uniquement certains scripts)
+  const nonce = getNonce();
 
-        .controls {
-          margin-top: 15px;
-          display: flex;
-          align-items: center;
-          gap: 15px;
-        }
+  // Remplacement des placeholders dans le fichier HTML
+  htmlContent = htmlContent
+    .replace(/{{cspSource}}/g, webview.cspSource)
+    .replace(/{{nonce}}/g, nonce)
+    .replace(/{{styleUri}}/g, styleUri.toString())
+    .replace(/{{scriptUri}}/g, scriptUri.toString())
+    .replace(/{{monacoLoaderUri}}/g, monacoLoaderUri.toString())
+    .replace(/{{monacoBaseUri}}/g, monacoBaseUri.toString());
 
-        .checkbox-container {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          flex-grow: 1;
-        }
+  return htmlContent;
+}
 
-        button {
-          padding: 8px 16px;
-          border: 1px solid var(--vscode-button-border);
-          background: var(--vscode-button-background);
-          color: var(--vscode-button-foreground);
-          cursor: pointer;
-          border-radius: 2px;
-          font-size: 13px;
-        }
-
-        button:hover {
-          background: var(--vscode-button-hoverBackground);
-        }
-
-        button.secondary {
-          background: var(--vscode-button-secondaryBackground);
-          color: var(--vscode-button-secondaryForeground);
-        }
-
-        button.secondary:hover {
-          background: var(--vscode-button-secondaryHoverBackground);
-        }
-
-        input[type="checkbox"] {
-          cursor: pointer;
-        }
-
-        /* Preview modal styles */
-        .modal {
-          display: none;
-          position: fixed;
-          z-index: 1000;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 100%;
-          background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-content {
-          background-color: var(--vscode-editor-background);
-          margin: 5% auto;
-          padding: 20px;
-          border: 1px solid var(--vscode-panel-border);
-          width: 90%;
-          max-height: 80vh;
-          overflow-y: auto;
-          border-radius: 4px;
-        }
-
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-        }
-
-        .close {
-          color: var(--vscode-foreground);
-          font-size: 28px;
-          font-weight: bold;
-          cursor: pointer;
-        }
-
-        .close:hover {
-          opacity: 0.7;
-        }
-
-        .file-changes {
-          list-style: none;
-          padding: 0;
-        }
-
-        .file-item {
-          padding: 10px;
-          margin-bottom: 10px;
-          border: 1px solid var(--vscode-panel-border);
-          border-radius: 3px;
-          cursor: pointer;
-        }
-
-        .file-item:hover {
-          background-color: var(--vscode-list-hoverBackground);
-        }
-
-        .file-path {
-          font-weight: bold;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .file-status {
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 11px;
-          font-weight: bold;
-        }
-
-        .status-new {
-          background-color: var(--vscode-gitDecoration-addedResourceForeground);
-          color: var(--vscode-editor-background);
-        }
-
-        .status-modified {
-          background-color: var(--vscode-gitDecoration-modifiedResourceForeground);
-          color: var(--vscode-editor-background);
-        }
-
-        .file-stats {
-          font-size: 12px;
-          color: var(--vscode-descriptionForeground);
-          margin-top: 5px;
-        }
-
-        .modal-footer {
-          margin-top: 20px;
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-        }
-      </style>
-  </head>
-  <body>
-      <h1>📋 LLM Code Paster</h1>
-
-      <div id="editor-container">
-        <div id="monaco-editor"></div>
-      </div>
-
-      <div class="controls">
-        <div class="checkbox-container">
-          <input type="checkbox" id="auto-save" checked>
-          <label for="auto-save">Auto-save files after update</label>
-        </div>
-        <button id="clear-button" class="secondary">Clear</button>
-        <button id="preview-button" class="secondary">Preview Changes</button>
-        <button id="update-button">Apply Changes</button>
-      </div>
-
-      <!-- Preview Modal -->
-      <div id="previewModal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2>Preview Changes</h2>
-            <span class="close" id="closeModal">&times;</span>
-          </div>
-          <div id="previewContent">
-            <ul class="file-changes" id="fileChangesList"></ul>
-          </div>
-          <div class="modal-footer">
-            <button id="cancelPreview" class="secondary">Cancel</button>
-            <button id="applyChanges">Apply All Changes</button>
-          </div>
-        </div>
-      </div>
-
-      <script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
-      <script>
-        const vscode = acquireVsCodeApi();
-
-        require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.44.0/min/vs' }});
-
-        require(['vs/editor/editor.main'], function() {
-          const editor = monaco.editor.create(document.getElementById('monaco-editor'), {
-            value: 'File: src/components/NewComponent.js\\nContent:\\n// your code here\\n\\nFile: src/styles/style.css\\nContent:\\n/* CSS here */',
-            language: 'plaintext',
-            theme: document.body.classList.contains('vscode-dark') ? 'vs-dark' :
-                   document.body.classList.contains('vscode-light') ? 'vs' : 'vs-dark',
-            minimap: { enabled: false },
-            fontSize: 13,
-            lineNumbers: 'on',
-            wordWrap: 'on',
-            automaticLayout: true,
-            scrollBeyondLastLine: false
-          });
-
-          // Define custom language for syntax highlighting
-          monaco.languages.register({ id: 'llm-paste' });
-          monaco.languages.setMonarchTokensProvider('llm-paste', {
-            tokenizer: {
-              root: [
-                [/^File:.*$/, 'keyword'],
-                [/^Content:.*$/, 'type'],
-                [/\\/\\/.*$/, 'comment'],
-                [/\\/\\*[\\s\\S]*?\\*\\//, 'comment'],
-                [/#.*$/, 'comment'],
-                [/"[^"]*"/, 'string'],
-                [/'[^']*'/, 'string'],
-                [/\\b(function|const|let|var|if|else|return|class|export|import)\\b/, 'keyword'],
-              ]
-            }
-          });
-
-          editor.getModel().setLanguage('llm-paste');
-
-          const updateButton = document.getElementById('update-button');
-          const clearButton = document.getElementById('clear-button');
-          const previewButton = document.getElementById('preview-button');
-          const autoSaveCheckbox = document.getElementById('auto-save');
-          const modal = document.getElementById('previewModal');
-          const closeModal = document.getElementById('closeModal');
-          const cancelPreview = document.getElementById('cancelPreview');
-          const applyChanges = document.getElementById('applyChanges');
-          const fileChangesList = document.getElementById('fileChangesList');
-
-          let currentChanges = [];
-
-          previewButton.addEventListener('click', () => {
-            const text = editor.getValue();
-            vscode.postMessage({
-              command: 'previewChanges',
-              text: text
-            });
-          });
-
-          updateButton.addEventListener('click', () => {
-            const text = editor.getValue();
-            const autoSave = autoSaveCheckbox.checked;
-            vscode.postMessage({
-              command: 'updateFiles',
-              text: text,
-              autoSave: autoSave
-            });
-          });
-
-          clearButton.addEventListener('click', () => {
-            editor.setValue('');
-            editor.focus();
-          });
-
-          // Modal controls
-          closeModal.onclick = () => {
-            modal.style.display = 'none';
-          };
-
-          cancelPreview.onclick = () => {
-            modal.style.display = 'none';
-          };
-
-          applyChanges.onclick = () => {
-            const text = editor.getValue();
-            const autoSave = autoSaveCheckbox.checked;
-            vscode.postMessage({
-              command: 'updateFiles',
-              text: text,
-              autoSave: autoSave
-            });
-            modal.style.display = 'none';
-          };
-
-          // Handle messages from extension
-          window.addEventListener('message', event => {
-            const message = event.data;
-            switch (message.command) {
-              case 'showPreview':
-                currentChanges = message.changes;
-                displayPreview(message.changes);
-                modal.style.display = 'block';
-                break;
-              case 'updateComplete':
-                modal.style.display = 'none';
-                break;
-            }
-          });
-
-          function displayPreview(changes) {
-            fileChangesList.innerHTML = '';
-
-            const newFiles = changes.filter(c => c.action === 'create');
-            const modifiedFiles = changes.filter(c => c.action === 'modify');
-
-            if (newFiles.length > 0) {
-              const header = document.createElement('h3');
-              header.textContent = 'New Files (' + newFiles.length + ')';
-              header.style.marginBottom = '10px';
-              fileChangesList.appendChild(header);
-
-              newFiles.forEach(change => {
-                const li = createFileItem(change);
-                fileChangesList.appendChild(li);
-              });
-            }
-
-            if (modifiedFiles.length > 0) {
-              const header = document.createElement('h3');
-              header.textContent = 'Modified Files (' + modifiedFiles.length + ')';
-              header.style.marginTop = '20px';
-              header.style.marginBottom = '10px';
-              fileChangesList.appendChild(header);
-
-              modifiedFiles.forEach(change => {
-                const li = createFileItem(change);
-                fileChangesList.appendChild(li);
-              });
-            }
-          }
-
-          function createFileItem(change) {
-            const li = document.createElement('li');
-            li.className = 'file-item';
-
-            const pathDiv = document.createElement('div');
-            pathDiv.className = 'file-path';
-
-            const icon = document.createElement('span');
-            icon.textContent = change.action === 'create' ? '➕' : '✏️';
-
-            const path = document.createElement('span');
-            path.textContent = change.filePath;
-
-            const status = document.createElement('span');
-            status.className = 'file-status status-' + (change.action === 'create' ? 'new' : 'modified');
-            status.textContent = change.action === 'create' ? 'NEW' : 'MODIFIED';
-
-            pathDiv.appendChild(icon);
-            pathDiv.appendChild(path);
-            pathDiv.appendChild(status);
-
-            const stats = document.createElement('div');
-            stats.className = 'file-stats';
-            const lines = change.newContent.split('\n').length;
-            stats.textContent = lines + ' lines';
-
-            if (change.action === 'modify') {
-              const oldLines = change.oldContent.split('\n').length;
-              const diff = lines - oldLines;
-              const diffText = diff > 0 ? '+' + diff : String(diff);
-              stats.textContent += ' (' + diffText + ' lines)';
-            }
-
-            li.appendChild(pathDiv);
-            li.appendChild(stats);
-
-            // Click to show diff
-            if (change.action === 'modify') {
-              li.style.cursor = 'pointer';
-              li.title = 'Click to view diff';
-              li.onclick = () => {
-                vscode.postMessage({
-                  command: 'showDiff',
-                  filePath: change.filePath,
-                  newContent: change.newContent
-                });
-              };
-            }
-
-            return li;
-          }
-
-          // Auto-focus editor
-          editor.focus();
-        });
-      </script>
-  </body>
-  </html>`;
+function getNonce() {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }

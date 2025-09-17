@@ -1,0 +1,163 @@
+/* webview/style.css */
+body {
+    font-family: var(--vscode-font-family);
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    padding: 20px;
+    margin: 0;
+}
+
+h1 {
+    font-size: 1.5em;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+#editor-container {
+    width: calc(100% - 2px);
+    /* Ajustement pour la bordure */
+    height: 70vh;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#monaco-editor {
+    width: 100%;
+    height: 100%;
+}
+
+.controls {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-grow: 1;
+}
+
+button {
+    padding: 8px 16px;
+    border: 1px solid var(--vscode-button-border);
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 13px;
+}
+
+button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+button.secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+button.secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* Preview modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: var(--vscode-editor-background);
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid var(--vscode-panel-border);
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 4px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.close {
+    color: var(--vscode-foreground);
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    opacity: 0.7;
+}
+
+.file-changes {
+    list-style: none;
+    padding: 0;
+}
+
+.file-item {
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+}
+
+.file-item.can-diff:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.file-path {
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.file-status {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.status-new {
+    background-color: var(--vscode-gitDecoration-addedResourceForeground);
+    color: var(--vscode-editor-background);
+}
+
+.status-modified {
+    background-color: var(--vscode-gitDecoration-modifiedResourceForeground);
+    color: var(--vscode-editor-background);
+}
+
+.file-stats {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 5px;
+}
+
+.modal-footer {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}

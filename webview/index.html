@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        style-src {{cspSource}} 'unsafe-inline';
+        script-src 'nonce-{{nonce}}' {{cspSource}};
+        font-src {{cspSource}};
+    ">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{styleUri}}">
+    <title>LLM Code Paster</title>
+</head>
+
+<body>
+    <h1>📋 LLM Code Paster</h1>
+
+    <div id="editor-container">
+        <div id="monaco-editor"></div>
+    </div>
+
+    <div class="controls">
+        <div class="checkbox-container">
+            <input type="checkbox" id="auto-save" checked>
+            <label for="auto-save">Auto-save files after update</label>
+        </div>
+        <button id="clear-button" class="secondary">Clear</button>
+        <button id="preview-button" class="secondary">Preview Changes</button>
+        <button id="update-button">Apply Changes</button>
+    </div>
+
+    <div id="previewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Preview Changes</h2>
+                <span class="close" id="closeModal">&times;</span>
+            </div>
+            <div id="previewContent">
+                <ul class="file-changes" id="fileChangesList"></ul>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelPreview" class="secondary">Cancel</button>
+                <button id="applyChanges">Apply All Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script nonce="{{nonce}}" src="{{monacoLoaderUri}}"></script>
+    <script nonce="{{nonce}}" src="{{scriptUri}}" data-monaco-base-uri="{{monacoBaseUri}}"></script>
+</body>
+
+</html>
