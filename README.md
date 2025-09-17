@@ -8,9 +8,9 @@ LLM Code Paster streamlines the workflow of applying code suggestions from AI as
 
 ## How to use
 
-1. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Run `LLM Paste and Replace Code`
-3. Paste your LLM-generated code in the format:
+1. Click the "LLM Paster" button in the status bar (bottom right)
+   OR use Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) → `LLM Paste and Replace Code`
+2. Paste your LLM-generated code in the format:
    ```
    File: path/to/file.js
    Content:
@@ -20,11 +20,12 @@ LLM Code Paster streamlines the workflow of applying code suggestions from AI as
    Content:
    # More code here
    ```
-4. Click "Create / Update Files"
-5. Files are instantly created/updated with optional auto-save
+3. Click "Create / Update Files"
+4. Files are instantly created/updated with optional auto-save
 
 ## Features
 
+- **Quick access** - Status bar button for instant access
 - **Batch file operations** - Create or update multiple files in one action
 - **Smart parsing** - Automatically detects file paths and content blocks
 - **Auto-save option** - Toggle automatic saving of modified files

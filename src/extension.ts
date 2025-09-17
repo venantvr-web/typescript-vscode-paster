@@ -2,6 +2,14 @@ import * as vscode from 'vscode';
 
 export function activate(context: vscode.ExtensionContext) {
 
+	// Create status bar item
+	const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.text = "$(paste) LLM Paster";
+	statusBarItem.tooltip = "Open LLM Code Paster";
+	statusBarItem.command = 'llm-code-paster.start';
+	statusBarItem.show();
+	context.subscriptions.push(statusBarItem);
+
 	let disposable = vscode.commands.registerCommand('llm-code-paster.start', () => {
 
 		const panel = vscode.window.createWebviewPanel(
