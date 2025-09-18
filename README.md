@@ -1,46 +1,36 @@
-# TypeScript VSCode Paster
+# LLM Paster : Appliquer des Patches de Code avec Prévisualisation et Diff
 
-Instantly paste and apply multi-file code snippets from LLMs into your VSCode workspace.
+Intégrez en toute sécurité les suggestions de code multi-fichiers de vos assistants IA (ChatGPT, Claude, Copilot, etc.) dans votre espace de travail VSCode. Ne copiez-collez plus à l'aveugle : prévisualisez, comparez les différences et appliquez les changements en un clic.
 
-## What it does
+## Fonctionnalités Clés
 
-TypeScript VSCode Paster streamlines the workflow of applying code suggestions from AI assistants like ChatGPT, Claude,
-or Copilot. Simply paste structured code output and the extension automatically creates or updates multiple files at
-once.
+L'analyse du code (`extension.ts`) révèle des fonctionnalités avancées qui vont au-delà d'un simple collage :
 
-## How to use
+  - **Prévisualisation Intégrée** : Avant d'appliquer les changements, obtenez un résumé clair des fichiers qui seront **créés** ou **modifiés**.
+  - **Comparaison Visuelle (Diff)** : Pour chaque fichier modifié, ouvrez une vue "diff" native de VSCode pour inspecter précisément les changements ligne par ligne.
+  - **Opérations par Lot** : Créez ou mettez à jour des dizaines de fichiers en une seule opération.
+  - **Interface Dédiée** : Une vue web (`Webview`) claire pour coller votre code et visualiser les actions.
+  - **Analyse Intelligente** : Détecte automatiquement les chemins de fichiers et les blocs de contenu à partir du texte collé.
+  - **Accès Rapide** : Lancez l'outil depuis la barre de statut (`$(paste) LLM Paster`) ou la palette de commandes.
+  - **Gestion des Erreurs** : Recevez des retours clairs en cas de format invalide ou de problème lors de l'analyse.
 
-1. Click the "LLM Paster" button in the status bar (bottom right)
-   OR use Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) → `LLM Paste and Replace Code`
-2. Paste your LLM-generated code in the format:
-   ```
-   File: path/to/file.js
-   Content:
-   // Your code here
+## Comment ça marche ?
 
-   File: another/file.py
-   Content:
-   # More code here
-   ```
-3. Click "Create / Update Files"
-4. Files are instantly created/updated with optional auto-save
+1.  Cliquez sur le bouton **`LLM Paster`** dans la barre de statut (en bas à droite) ou utilisez la Palette de Commandes (`Ctrl+Shift+P` / `Cmd+Shift+P`) → `LLM Paste and Replace Code`.
+2.  Dans l'onglet qui s'ouvre, collez le code généré par votre LLM.
+3.  Cliquez sur **"Preview Changes"**. Une liste des fichiers à créer ou modifier apparaît.
+4.  **(Optionnel)** Pour un fichier qui sera **modifié**, cliquez sur le bouton "Diff" à côté de son nom pour ouvrir une vue de comparaison détaillée.
+5.  Lorsque vous êtes satisfait, cliquez sur **"Create / Update Files"** pour appliquer les changements à votre espace de travail.
 
-## Features
+## Format Attendu
 
-- **Quick access** - Status bar button for instant access
-- **Batch file operations** - Create or update multiple files in one action
-- **Smart parsing** - Automatically detects file paths and content blocks
-- **Auto-save option** - Toggle automatic saving of modified files
-- **Workspace integration** - Works seamlessly with your current VSCode workspace
-- **Error handling** - Clear feedback on parsing errors or invalid formats
-
-## Format Example
+Utilisez un format simple et lisible pour que l'extension puisse analyser le contenu. Chaque bloc de fichier doit commencer par `File:` suivi du chemin, et `Content:` sur la ligne suivante.
 
 ```
 File: src/components/Button.tsx
 Content:
 export const Button = ({ label, onClick }) => {
-  return <button onClick={onClick}>{label}</button>
+  return <button className="button" onClick={onClick}>{label}</button>
 }
 
 File: src/styles/button.css
@@ -48,20 +38,22 @@ Content:
 .button {
   padding: 10px 20px;
   border-radius: 4px;
+  background-color: #007bff;
+  color: white;
 }
 ```
 
 ## Installation
 
-1. Install from VSCode Marketplace or from VSIX file
-2. Open any workspace folder
-3. Start using with `LLM Paste and Replace Code` command
+1.  Installez l'extension depuis la [Marketplace VSCode](https://marketplace.visualstudio.com) ou via un fichier `VSIX`.
+2.  Ouvrez un dossier ou un espace de travail dans VSCode.
+3.  Commencez à utiliser l'extension \!
 
-## Requirements
+## Prérequis
 
-- VSCode 1.80.0 or higher
-- Active workspace folder
+  - VSCode version 1.80.0 ou supérieure.
+  - Un dossier doit être ouvert dans l'espace de travail.
 
-## License
+## Licence
 
 MIT
