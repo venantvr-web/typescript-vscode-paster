@@ -1,6 +1,6 @@
 {
-  "name": "llm-code-paster",
-  "displayName": "LLM Code Paster",
+  "name": "typescript-vscode-paster",
+  "displayName": "TypeScript VSCode Paster",
   "description": "Paste and create multi-file code snippets from an LLM.",
   "version": "0.0.1",
   "engines": {
@@ -14,7 +14,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "llm-code-paster.start",
+        "command": "typescript-vscode-paster.start",
         "title": "LLM Paste and Replace Code"
       }
     ]

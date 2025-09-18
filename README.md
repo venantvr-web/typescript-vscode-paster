@@ -1,10 +1,10 @@
-# LLM Code Paster
+# TypeScript VSCode Paster
 
 Instantly paste and apply multi-file code snippets from LLMs into your VSCode workspace.
 
 ## What it does
 
-LLM Code Paster streamlines the workflow of applying code suggestions from AI assistants like ChatGPT, Claude, or Copilot. Simply paste structured code output and the extension automatically creates or updates multiple files at once.
+TypeScript VSCode Paster streamlines the workflow of applying code suggestions from AI assistants like ChatGPT, Claude, or Copilot. Simply paste structured code output and the extension automatically creates or updates multiple files at once.
 
 ## How to use
 

@@ -9,15 +9,15 @@ export function activate(context: vscode.ExtensionContext) {
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = "$(paste) LLM Paster";
   statusBarItem.tooltip = "Open LLM Code Paster";
-  statusBarItem.command = 'llm-code-paster.start';
+  statusBarItem.command = 'typescript-vscode-paster.start';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
-  let disposable = vscode.commands.registerCommand('llm-code-paster.start', () => {
+  let disposable = vscode.commands.registerCommand('typescript-vscode-paster.start', () => {
 
     const panel = vscode.window.createWebviewPanel(
       'codePaster',
-      'LLM Code Paster',
+      'TypeScript VSCode Paster',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
