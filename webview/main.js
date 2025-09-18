@@ -2,17 +2,14 @@
 (function () {
     const vscode = acquireVsCodeApi();
 
-    // On récupère l'URI de base pour Monaco depuis l'attribut data que nous avons ajouté
     const monacoBaseUri = document.currentScript.dataset.monacoBaseUri;
-
     require.config({ paths: { 'vs': monacoBaseUri } });
 
     require(['vs/editor/editor.main'], function () {
         const editor = monaco.editor.create(document.getElementById('monaco-editor'), {
             value: 'File: src/components/NewComponent.js\nContent:\n// your code here\n\nFile: src/styles/style.css\nContent:\n/* CSS here */',
             language: 'plaintext',
-            theme: document.body.classList.contains('vscode-dark') ? 'vs-dark' :
-                document.body.classList.contains('vscode-light') ? 'vs' : 'vs-dark',
+            theme: document.body.classList.contains('vscode-dark') ? 'vs-dark' : 'vs',
             minimap: { enabled: false },
             fontSize: 13,
             lineNumbers: 'on',
@@ -21,7 +18,6 @@
             scrollBeyondLastLine: false
         });
 
-        // Le reste de votre script est identique
         monaco.languages.register({ id: 'llm-paste' });
         monaco.languages.setMonarchTokensProvider('llm-paste', {
             tokenizer: {
@@ -39,7 +35,6 @@
         });
         monaco.editor.setModelLanguage(editor.getModel(), 'llm-paste');
 
-
         const updateButton = document.getElementById('update-button');
         const clearButton = document.getElementById('clear-button');
         const previewButton = document.getElementById('preview-button');
@@ -49,8 +44,6 @@
         const cancelPreview = document.getElementById('cancelPreview');
         const applyChanges = document.getElementById('applyChanges');
         const fileChangesList = document.getElementById('fileChangesList');
-
-        let currentChanges = [];
 
         previewButton.addEventListener('click', () => {
             const text = editor.getValue();
@@ -75,14 +68,8 @@
             editor.focus();
         });
 
-        // Modal controls
-        closeModal.onclick = () => {
-            modal.style.display = 'none';
-        };
-
-        cancelPreview.onclick = () => {
-            modal.style.display = 'none';
-        };
+        closeModal.onclick = () => modal.style.display = 'none';
+        cancelPreview.onclick = () => modal.style.display = 'none';
 
         applyChanges.onclick = () => {
             const text = editor.getValue();
@@ -95,12 +82,10 @@
             modal.style.display = 'none';
         };
 
-        // Handle messages from extension
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.command) {
                 case 'showPreview':
-                    currentChanges = message.changes;
                     displayPreview(message.changes);
                     modal.style.display = 'block';
                     break;
@@ -112,13 +97,12 @@
 
         function displayPreview(changes) {
             fileChangesList.innerHTML = '';
-
             const newFiles = changes.filter(c => c.action === 'create');
             const modifiedFiles = changes.filter(c => c.action === 'modify');
 
             if (newFiles.length > 0) {
                 const header = document.createElement('h3');
-                header.textContent = 'New Files (' + newFiles.length + ')';
+                header.textContent = `New Files (${newFiles.length})`;
                 header.style.marginBottom = '10px';
                 fileChangesList.appendChild(header);
                 newFiles.forEach(change => fileChangesList.appendChild(createFileItem(change)));
@@ -126,12 +110,24 @@
 
             if (modifiedFiles.length > 0) {
                 const header = document.createElement('h3');
-                header.textContent = 'Modified Files (' + modifiedFiles.length + ')';
+                header.textContent = `Modified Files (${modifiedFiles.length})`;
                 header.style.marginTop = '20px';
                 header.style.marginBottom = '10px';
                 fileChangesList.appendChild(header);
                 modifiedFiles.forEach(change => fileChangesList.appendChild(createFileItem(change)));
             }
+        }
+
+        // =========================================================================
+        // NOUVELLE FONCTION POUR COMPTER LES LIGNES CORRECTEMENT
+        // =========================================================================
+        function countLines(text) {
+            if (typeof text !== 'string' || text === '') {
+                return 0;
+            }
+            // Compte simplement le nombre de sauts de ligne et ajoute 1.
+            // S'il n'y a pas de texte, le résultat est 1, donc on retourne 0 dans ce cas.
+            return (text.match(/\n/g) || '').length + 1;
         }
 
         function createFileItem(change) {
@@ -149,7 +145,7 @@
             path.textContent = change.filePath;
 
             const status = document.createElement('span');
-            status.className = 'file-status status-' + (change.action === 'create' ? 'new' : 'modified');
+            status.className = `file-status status-${change.action === 'create' ? 'new' : 'modified'}`;
             status.textContent = change.action === 'create' ? 'NEW' : 'MODIFIED';
 
             pathDiv.appendChild(icon);
@@ -158,20 +154,27 @@
 
             const stats = document.createElement('div');
             stats.className = 'file-stats';
-            const lines = change.newContent.split('\n').length;
-            stats.textContent = lines + (lines > 1 ? ' lines' : ' line');
+
+            // =========================================================================
+            // ON UTILISE NOTRE NOUVELLE FONCTION ICI
+            // =========================================================================
+            const newLinesCount = countLines(change.newContent);
+            stats.textContent = `${newLinesCount} ${newLinesCount > 1 ? 'lines' : 'line'}`;
 
             if (change.action === 'modify') {
-                const oldLines = change.oldContent.split('\n').length;
-                const diff = lines - oldLines;
-                const diffText = diff > 0 ? `+${diff}` : String(diff);
-                stats.textContent += ` (${diffText})`;
+                const oldLinesCount = countLines(change.oldContent);
+                const diff = newLinesCount - oldLinesCount;
+
+                // On affiche la différence seulement si elle est non nulle
+                if (diff !== 0) {
+                    const diffText = diff > 0 ? `+${diff}` : String(diff);
+                    stats.textContent += ` (${diffText})`;
+                }
             }
 
             li.appendChild(pathDiv);
             li.appendChild(stats);
 
-            // Click to show diff
             if (change.action === 'modify') {
                 li.classList.add('can-diff');
                 li.style.cursor = 'pointer';
@@ -188,7 +191,6 @@
             return li;
         }
 
-        // Auto-focus editor
         editor.focus();
     });
 })();

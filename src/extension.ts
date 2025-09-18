@@ -3,9 +3,35 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// =========================================================================
+// 1. On crée notre "serveur de fichiers virtuel" (Content Provider)
+// =========================================================================
+class DiffContentProvider implements vscode.TextDocumentContentProvider {
+  // onDidChange est requis par l'interface, mais nous n'en avons pas besoin ici.
+  public onDidChange?: vscode.Event<vscode.Uri> | undefined;
+
+  // C'est ici qu'on stockera le nouveau contenu des fichiers à prévisualiser.
+  // La clé est le chemin du fichier (ex: "src/index.ts"), la valeur est le contenu.
+  public newContent = new Map<string, string>();
+
+  // C'est la méthode que VS Code appellera quand il verra une URI avec notre schéma.
+  provideTextDocumentContent(uri: vscode.Uri): vscode.ProviderResult<string> {
+    // On récupère le contenu correspondant au chemin du fichier depuis notre Map.
+    return this.newContent.get(uri.path);
+  }
+}
+
+
 export function activate(context: vscode.ExtensionContext) {
 
-  // Create status bar item (inchangé)
+  // =========================================================================
+  // 2. On instancie et on enregistre notre Provider au démarrage.
+  // =========================================================================
+  const diffProvider = new DiffContentProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('llm-paster-preview', diffProvider)
+  );
+
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = "$(paste) LLM Paster";
   statusBarItem.tooltip = "Open LLM Code Paster";
@@ -17,72 +43,83 @@ export function activate(context: vscode.ExtensionContext) {
 
     const panel = vscode.window.createWebviewPanel(
       'codePaster',
-      'TypeScript VSCode Paster',
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        // On ajoute les localResourceRoots pour autoriser l'accès aux fichiers de notre extension
-        localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, 'webview'),
-          vscode.Uri.joinPath(context.extensionUri, 'node_modules')
-        ]
-      }
+      'LLM Code Paster',
+      vscode.ViewColumn.One, {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      localResourceRoots: [
+        vscode.Uri.joinPath(context.extensionUri, 'webview'),
+        vscode.Uri.joinPath(context.extensionUri, 'node_modules')
+      ]
+    }
     );
 
-    // On passe le panel et le contexte à notre nouvelle fonction
     panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
 
-    // Le reste de la logique de communication est presque identique
     panel.webview.onDidReceiveMessage(
       async message => {
         switch (message.command) {
+
           case 'previewChanges':
             try {
               const filesToUpdate = parseInputText(message.text);
+
+              // =========================================================================
+              // 3. On met à jour notre Provider avec le contenu le plus récent.
+              // =========================================================================
+              diffProvider.newContent.clear(); // On vide l'ancien contenu
+              for (const filePath in filesToUpdate) {
+                diffProvider.newContent.set(filePath, filesToUpdate[filePath]);
+              }
+
               const changes = await previewChanges(filesToUpdate);
               panel.webview.postMessage({ command: 'showPreview', changes });
             } catch (e: any) {
-              vscode.window.showErrorMessage(`Error: ${e.message}`);
+              vscode.window.showErrorMessage(`Error parsing for preview: ${e.message}`);
             }
             return;
+
           case 'updateFiles':
             try {
               const filesToUpdate = parseInputText(message.text);
-              await applyFileUpdates(filesToUpdate, message.autoSave);
+              if (Object.keys(filesToUpdate).length === 0) {
+                vscode.window.showWarningMessage("No files to update. Check the input format.");
+                return;
+              }
+              await applyFileUpdates(filesToUpdate);
               vscode.window.showInformationMessage(`Successfully created/updated ${Object.keys(filesToUpdate).length} file(s).`);
               panel.webview.postMessage({ command: 'updateComplete' });
             } catch (e: any) {
-              vscode.window.showErrorMessage(`Error: ${e.message}`);
+              vscode.window.showErrorMessage(`Error updating files: ${e.message}`);
             }
             return;
+
           case 'showDiff':
             try {
               const workspaceFolders = vscode.workspace.workspaceFolders;
               if (!workspaceFolders) {
                 throw new Error("No workspace folder open");
               }
-              const rootUri = workspaceFolders[0].uri;
-              const fileUri = vscode.Uri.joinPath(rootUri, message.filePath);
 
-              // La logique pour créer un fichier temporaire et montrer le diff est complexe
-              // et peut être sujette à des "race conditions".
-              // Une approche plus simple est de créer un fichier temporaire dans le système de fichiers.
-              // Mais nous gardons votre approche `untitled` qui est bonne.
-              const tempUri = vscode.Uri.parse(`untitled:${path.join(workspaceFolders[0].uri.fsPath, message.filePath)}.new`);
-              const doc = await vscode.workspace.openTextDocument(tempUri);
-              const edit = new vscode.WorkspaceEdit();
-              edit.insert(tempUri, new vscode.Position(0, 0), message.newContent);
-              await vscode.workspace.applyEdit(edit);
+              // Côté GAUCHE du diff : le fichier original sur le disque.
+              const originalFileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, message.filePath);
 
-              // Attendre que le document soit prêt avant de lancer le diff
-              await doc.save();
+              // =========================================================================
+              // 4. On crée une URI avec notre schéma personnalisé.
+              // =========================================================================
+              const newContentUri = vscode.Uri.parse(`llm-paster-preview:${message.filePath}`);
 
-              vscode.commands.executeCommand('vscode.diff', fileUri, tempUri, `${message.filePath} (Preview)`);
+              // On lance la commande de diff. VS Code va automatiquement appeler notre Provider
+              // pour obtenir le contenu de `newContentUri`.
+              await vscode.commands.executeCommand(
+                'vscode.diff',
+                originalFileUri,
+                newContentUri,
+                `${message.filePath} (Preview)`
+              );
 
             } catch (e: any) {
-              // On vérifie si l'erreur est que le fichier original n'existe pas.
-              if (e.message.includes('cannot open')) {
+              if (e.message && e.message.includes('cannot open')) {
                 vscode.window.showInformationMessage("Cannot show diff for a new file.");
               } else {
                 vscode.window.showErrorMessage(`Error showing diff: ${e.message}`);
@@ -99,8 +136,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(disposable);
 }
 
-// Les fonctions parseInputText, applyFileUpdates, previewChanges restent inchangées...
-// ... (collez vos fonctions ici)
+// Les fonctions ci-dessous restent inchangées.
+
 function parseInputText(text: string): { [filePath: string]: string } {
   const files: { [filePath: string]: string } = {};
   const lines = text.split(/\r?\n/);
@@ -111,50 +148,49 @@ function parseInputText(text: string): { [filePath: string]: string } {
 
   const firstMeaningfulLine = lines.find(line => line.trim() !== '');
   if (!firstMeaningfulLine || !firstMeaningfulLine.startsWith('File:')) {
-    throw new Error("Format invalide : Le texte doit commencer par une ligne 'File:'.");
+    throw new Error("Invalid Format: Text must start with a 'File:' line.");
   }
 
   let currentPath = '';
   let contentLines: string[] = [];
-  let parsingContent = false;
+  let isParsingContent = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.startsWith('File: ')) {
-      if (parsingContent) { // Save previous file
+    if (line.startsWith('File:')) {
+      if (isParsingContent) {
         files[currentPath] = contentLines.join('\n');
       }
-      currentPath = line.substring('File: '.length).trim();
+      currentPath = line.substring('File:'.length).trim();
       if (!currentPath) {
-        throw new Error(`Erreur de syntaxe à la ligne ${i + 1}: Le chemin du fichier ne peut pas être vide.`);
+        throw new Error(`Syntax Error at line ${i + 1}: File path cannot be empty.`);
       }
       contentLines = [];
-      parsingContent = false;
+      isParsingContent = false;
+
       if (i + 1 < lines.length && lines[i + 1].startsWith('Content:')) {
-        parsingContent = true;
-        i++; // Skip 'Content:' line
+        isParsingContent = true;
+        i++;
       } else {
-        throw new Error(`Erreur de syntaxe à la ligne ${i + 2}: Une ligne 'File:' doit être immédiatement suivie par une ligne 'Content:'.`);
+        files[currentPath] = '';
       }
-    } else if (parsingContent) {
+    } else if (isParsingContent) {
       contentLines.push(line);
     }
   }
 
-  if (currentPath && parsingContent) {
+  if (currentPath && isParsingContent) {
     files[currentPath] = contentLines.join('\n');
   }
 
-
   if (Object.keys(files).length === 0) {
-    throw new Error("Aucun bloc 'File:' valide n'a été trouvé. Vérifiez le format.");
+    throw new Error("No valid 'File:' blocks were found. Please check the format.");
   }
 
   return files;
 }
 
-
-async function applyFileUpdates(files: { [filePath: string]: string }, autoSave: boolean = true) {
+async function applyFileUpdates(files: { [filePath: string]: string }) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders) {
     throw new Error("You must have a folder open in your workspace.");
@@ -162,21 +198,13 @@ async function applyFileUpdates(files: { [filePath: string]: string }, autoSave:
   const rootUri = workspaceFolders[0].uri;
 
   for (const filePath in files) {
-    const newContent = files[filePath];
     const fileUri = vscode.Uri.joinPath(rootUri, filePath);
-
+    const newContent = files[filePath];
     const contentUint8Array = new TextEncoder().encode(newContent);
 
-    // Utiliser fs.writeFile est plus direct pour créer/écraser.
     await vscode.workspace.fs.writeFile(fileUri, contentUint8Array);
   }
-
-  if (autoSave) {
-    // Le writeFile ci-dessus enregistre déjà les fichiers, mais si on utilisait WorkspaceEdit,
-    // la boucle de sauvegarde serait nécessaire. C'est maintenant redondant.
-  }
 }
-
 
 async function previewChanges(files: { [filePath: string]: string }): Promise<any[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -211,27 +239,18 @@ async function previewChanges(files: { [filePath: string]: string }): Promise<an
   return changes;
 }
 
-// =========================================================================
-// NOUVELLE FONCTION POUR CHARGER LE HTML
-// =========================================================================
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-  // Chemin vers le fichier HTML sur le disque
   const htmlPath = path.join(extensionUri.fsPath, 'webview', 'index.html');
   let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
-  // Fonction pour générer une URI sécurisée pour la webview
   const getUri = (...p: string[]) => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, ...p));
 
-  // URIs pour nos fichiers locaux
   const scriptUri = getUri('webview', 'main.js');
   const styleUri = getUri('webview', 'style.css');
   const monacoLoaderUri = getUri('node_modules', 'monaco-editor', 'min', 'vs', 'loader.js');
   const monacoBaseUri = getUri('node_modules', 'monaco-editor', 'min', 'vs');
-
-  // Utilisation d'un "nonce" pour la sécurité (autorise uniquement certains scripts)
   const nonce = getNonce();
 
-  // Remplacement des placeholders dans le fichier HTML
   htmlContent = htmlContent
     .replace(/{{cspSource}}/g, webview.cspSource)
     .replace(/{{nonce}}/g, nonce)
