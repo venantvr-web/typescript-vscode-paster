@@ -1,4 +1,4 @@
-# LLM Paster : Intégrez des Patches de Code Multi-fichiers avec Prévisualisation et Comparaison
+# Intégrez des Patches de Code Multi-fichiers avec Prévisualisation et Comparaison
 
 Intégrez en toute sécurité les suggestions de code multi-fichiers de vos assistants IA (ChatGPT, Claude, Copilot, etc.) dans votre espace de travail VSCode. Ne copiez-collez plus à l'aveugle : prévisualisez, comparez les différences ligne par ligne et appliquez les changements en un clic.
 
