@@ -3,14 +3,14 @@
     const vscode = acquireVsCodeApi();
 
     const monacoBaseUri = document.currentScript.dataset.monacoBaseUri;
-    require.config({ paths: { 'vs': monacoBaseUri } });
+    require.config({paths: {'vs': monacoBaseUri}});
 
     require(['vs/editor/editor.main'], function () {
         const editor = monaco.editor.create(document.getElementById('monaco-editor'), {
             value: 'File: src/components/NewComponent.js\nContent:\n// your code here\n\nFile: src/styles/style.css\nContent:\n/* CSS here */',
             language: 'plaintext',
             theme: document.body.classList.contains('vscode-dark') ? 'vs-dark' : 'vs',
-            minimap: { enabled: false },
+            minimap: {enabled: false},
             fontSize: 13,
             lineNumbers: 'on',
             wordWrap: 'on',
@@ -18,7 +18,7 @@
             scrollBeyondLastLine: false
         });
 
-        monaco.languages.register({ id: 'llm-paste' });
+        monaco.languages.register({id: 'llm-paste'});
         monaco.languages.setMonarchTokensProvider('llm-paste', {
             tokenizer: {
                 root: [

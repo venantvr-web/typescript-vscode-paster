@@ -15,40 +15,40 @@
 </head>
 
 <body>
-    <h1>📋 TypeScript VSCode Paster</h1>
+<h1>📋 TypeScript VSCode Paster</h1>
 
-    <div id="editor-container">
-        <div id="monaco-editor"></div>
+<div id="editor-container">
+    <div id="monaco-editor"></div>
+</div>
+
+<div class="controls">
+    <div class="checkbox-container">
+        <input type="checkbox" id="auto-save" checked>
+        <label for="auto-save">Auto-save files after update</label>
     </div>
+    <button id="clear-button" class="secondary">Clear</button>
+    <button id="preview-button" class="secondary">Preview Changes</button>
+    <button id="update-button">Apply Changes</button>
+</div>
 
-    <div class="controls">
-        <div class="checkbox-container">
-            <input type="checkbox" id="auto-save" checked>
-            <label for="auto-save">Auto-save files after update</label>
+<div id="previewModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Preview Changes</h2>
+            <span class="close" id="closeModal">&times;</span>
         </div>
-        <button id="clear-button" class="secondary">Clear</button>
-        <button id="preview-button" class="secondary">Preview Changes</button>
-        <button id="update-button">Apply Changes</button>
-    </div>
-
-    <div id="previewModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Preview Changes</h2>
-                <span class="close" id="closeModal">&times;</span>
-            </div>
-            <div id="previewContent">
-                <ul class="file-changes" id="fileChangesList"></ul>
-            </div>
-            <div class="modal-footer">
-                <button id="cancelPreview" class="secondary">Cancel</button>
-                <button id="applyChanges">Apply All Changes</button>
-            </div>
+        <div id="previewContent">
+            <ul class="file-changes" id="fileChangesList"></ul>
+        </div>
+        <div class="modal-footer">
+            <button id="cancelPreview" class="secondary">Cancel</button>
+            <button id="applyChanges">Apply All Changes</button>
         </div>
     </div>
+</div>
 
-    <script nonce="{{nonce}}" src="{{monacoLoaderUri}}"></script>
-    <script nonce="{{nonce}}" src="{{scriptUri}}" data-monaco-base-uri="{{monacoBaseUri}}"></script>
+<script nonce="{{nonce}}" src="{{monacoLoaderUri}}"></script>
+<script nonce="{{nonce}}" src="{{scriptUri}}" data-monaco-base-uri="{{monacoBaseUri}}"></script>
 </body>
 
 </html>
